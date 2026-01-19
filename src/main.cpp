@@ -217,9 +217,9 @@ Deck deck1;
 
 BlackjackGame blackjack;
 
-int total_players = 1;
+int total_players = 4;
 
-
+//Functions ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 //The code between is AI-generated as I could not be bothered to redo the entire thing on my own. It is not important code, just annoying to add----------------------------------------------------------------
 struct ButtonEntry {
@@ -298,8 +298,37 @@ void handleAction(ButtonAction action)
       break;
   }
 }
+//AI Finished ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-//----------------------------------------------------------------
+void updateUI(){
+
+for (int i = 0; i <= total_players; i++) {
+  //Player Names
+  auto pos = blackjack.getPlayerIndexPos(i);
+  display.setCursor(pos[0], pos[1]);
+  display.print(blackjack.getPlayerIndexName(i));
+
+  //Player Turn
+  if(blackjack.getPlayerIndexCurrentTurn(i) == true){
+    display.drawLine(pos[0],pos[1] + screen.CHAR_H,pos[0] + screen.CHAR_W * 1, pos[1] + screen.CHAR_H,SSD1306_WHITE);
+  }
+  //Player Cards
+  if(i == 0){
+  display.setCursor(pos[0] + (screen.CHAR_W/2),pos[1]+screen.CHAR_H);
+  }
+  else{
+  display.setCursor(pos[0] + (screen.CHAR_W * 3),pos[1]);
+  }
+  display.print(blackjack.getPlayerIndexValue(i));
+
+  //Player Won
+  if(blackjack.getPlayerIndexWon(i) == true){
+    display.drawRect(pos[0],pos[1],screen.CHAR_W * 2, screen.CHAR_H,SSD1306_WHITE);
+  }
+}
+}
+
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void setup() {
   Wire.begin();   // REQUIRED on Nano 33 BLE Sense Rev2
@@ -337,35 +366,23 @@ void setup() {
 
   blackjack.gameInit(deck1);
   for(int i = 0; i < total_players; i++){
-    blackjack.createPlayers("Player"+String(i+1));
+    blackjack.createPlayers("P"+String(i+1));
   }
   blackjack.reversePlayers();
-
-  blackjack.dealingFunction();
-  display.println(blackjack.getPlayers());
-  display.println("");
-  display.println(blackjack.getPlayerHands());
-
-  display.display();
   
+  blackjack.setPlayerPosition();
 }
 void loop() {
 
   timing.currentMillis = millis();
-  display.clearDisplay();
-  display.setCursor(0,0);
   //Start MENU ---------------------------------------------------------------------------------------------------
   //Controlling Logic
+  display.clearDisplay();
   ButtonAction action = readControls();
   blackjack.update(action);
 
-  display.print(blackjack.getPlayers());
-  display.print(": ");
-  display.println(blackjack.getPlayerHands());
-
-  display.println(blackjack.getStateString());
+  updateUI();
   display.display();
-
 
 }
 

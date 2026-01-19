@@ -4,9 +4,12 @@
 #include <Adafruit_SSD1306.h>
 #include <iostream>
 #include <string>
+#include <array>
 
-#define CHAR_W 8   // Default Adafruit GFX font
+#define CHAR_W 6   // Default Adafruit GFX font
 #define CHAR_H 8
+#define SIZE_X 128
+#define SIZE_Y 64
 
 //Korten som ska användas är relativt simpla. Endast clothing och value
 
@@ -213,6 +216,7 @@ Player::Player(String name) {
     next = nullptr;
     cardCount = 0;
     handValue = 0;
+    aceCount = 0;
     numOfHands = 1;
     points = 0;
     posX = 0;
@@ -236,18 +240,8 @@ void Player::addToHand(String value, String suitAssign)
     // Add the card
     handValue += v;
 
-    // If we bust and we have an Ace counted as 11, reduce by 10 (Ace becomes 1)
-    // This needs an ace counter to work reliably; simplest version:
-    if (handValue > 21) {
-        // Scan the hand for an Ace and downgrade one Ace from 11 to 1
-        Card* curr = head;
-        while (curr != nullptr) {
-            if (curr->getType() == "A") {
-                handValue -= 10;  // convert one Ace from 11 to 1
-                break;
-            }
-            curr = curr->next;
-        }
+    if (value == "A") {
+        aceCount++;
     }
 }
 
@@ -257,7 +251,7 @@ String Player::checkHandCards()
     Card* curr = head;
 
     while (curr != nullptr) {
-        if (out.length() > 0) out += " ";
+        if (out.length() > 0) out += "|";
         out += curr->getType();
         curr = curr->next;
     }
@@ -266,7 +260,13 @@ String Player::checkHandCards()
 }
 
 int Player::getHandVal(){
-    return handValue;
+    int val = handValue;
+    int aces = aceCount;
+    while (val > 21 && aces > 0) {
+        val -= 10;
+        aces--;
+    }
+    return val;
 }
 
 boolean Player::checkSplit(){
@@ -292,6 +292,7 @@ void Player::clearHand()
     head = nullptr;
     cardCount = 0;
     handValue = 0;
+    aceCount = 0;
 
     // If you track soft aces, also reset it:
     // softAces = 0;
@@ -299,7 +300,7 @@ void Player::clearHand()
 
 boolean Player::isBusted(){
     
-    if(handValue > 21){
+    if(getHandVal() > 21){
         return true;
     }
     return false;
@@ -362,6 +363,21 @@ void Player::pushResult(){
     wonCase = false;
 }
 
+bool Player::isTurn()
+{
+    return isTurnNow;
+}
+
+void Player::setTurnFalse(){
+    isTurnNow = false;
+}
+void Player::setTurnTrue(){
+    isTurnNow = true;
+}
+void Player::setPushFalse(){
+    push = false;
+}
+
 
 //GAME -------------------------------------------------------
 void BlackjackGame::setState(GameState newState){
@@ -386,6 +402,7 @@ String BlackjackGame::getStateString(){
 
 void BlackjackGame::createPlayers(String name){
     Player* node = new Player(name);
+    num_of_players++;
     node->next = head;
     head = node;
 }
@@ -423,6 +440,58 @@ String BlackjackGame::getPlayerHands(){
 
 }
 
+String BlackjackGame::getPlayerIndexHand(int index){
+    int i = 0;
+    Player* curr = head;
+
+    while (curr != nullptr)
+    {
+        if (index == i)
+        {
+            return curr->checkHandCards();
+        }
+        curr = curr->next;
+        i++;
+    }
+
+    // Index not found
+    return "";
+}
+
+std::array<int,2> BlackjackGame::getPlayerIndexPos(int index){
+    int i = 0;
+    Player* curr = head;
+    if(curr == nullptr){
+        return{0,0};
+    }
+    while(curr != nullptr){
+        if(index == i){
+            return {curr->getPosX(), curr->getPosY()};
+        }
+        i++;
+        curr = curr->next;
+    }
+    return {0,0};
+}
+
+String BlackjackGame::getPlayerIndexName(int index){
+    int i = 0;
+    Player* curr = head;
+
+    while (curr != nullptr)
+    {
+        if (index == i)
+        {
+            return curr->getName();
+        }
+        curr = curr->next;
+        i++;
+    }
+
+    // Index not found
+    return "";
+}
+
 //AI Generated. Could not be bothered
 void BlackjackGame::reversePlayers()
 {
@@ -452,6 +521,8 @@ void BlackjackGame::initialStateFunction(){
     Player* curr = head;
     while(curr != nullptr){
         curr->clearHand();
+        curr->setWonStateLoss();
+        curr->setPushFalse();
         curr = curr->next;
     }
     state = GameState::WaitingForPlayers;
@@ -538,18 +609,22 @@ void BlackjackGame::dealingFunction(){
 
 void BlackjackGame::playerTurnFunction(ButtonAction action){
     if(!currentPlayer) return;
-
+    currentPlayer->setTurnTrue();
     switch(action){
         case ButtonAction::GreenTop:
+            if(!currentPlayer->isBusted()){
             // Hit: deal a card to the current player
             deckPtr->dealCard(*deckPtr, *currentPlayer);
+            }
             if(currentPlayer->isBusted()){
+                currentPlayer->setTurnFalse();
                 currentPlayer = currentPlayer->next;
                 if(!currentPlayer) setState(GameState::DealerTurn);
             }
             break;
         case ButtonAction::GreenBottom:
             // Stand: move to next player
+            currentPlayer->setTurnFalse();
             currentPlayer = currentPlayer->next;
             if(!currentPlayer) setState(GameState::DealerTurn);
             break;
@@ -589,7 +664,7 @@ void BlackjackGame::finishedFunction(){
             }
         }
         else{
-            if(curr->getHandVal() < 21){
+            if(curr->getHandVal() <= 21){
                 curr->setWonStateWon();
             }
             if(curr->isBusted() == true){
@@ -614,4 +689,80 @@ void BlackjackGame::restartFunction(ButtonAction action){
         break;
 
     }
+}
+
+//User interface UI ---------------------------------------------------------
+
+void BlackjackGame::setPlayerPosition()
+{
+    if (!head) return;
+
+    // Dealer (top, centered)
+    head->setPos(SIZE_X - CHAR_W * 8, SIZE_Y/2);
+
+    if (num_of_players <= 0) return;
+
+    // column width (float math!)
+    float step = ((float)SIZE_Y / (2.0f * num_of_players));
+
+    int i = 1;
+    Player* curr = head->next;   // start at first non-dealer player
+    while (curr != nullptr)
+    {
+        curr->setPos(0, (int)round(step * 2 * i));
+        curr = curr->next;
+        i++;
+    }
+}
+
+bool BlackjackGame::getPlayerIndexWon(int index){
+    Player* curr = head;
+    int i = 0;
+    while(curr != nullptr){
+        if(i == index){
+            return curr->getWonState();
+        }
+        i++;
+        curr = curr->next;
+    }
+    return false;
+}
+
+int BlackjackGame::getPlayerIndexNumberOfCards(int index){
+        Player* curr = head;
+    int i = 0;
+    while(curr != nullptr){
+        if(i == index){
+            return curr->numOfCards();
+        }
+        i++;
+        curr = curr->next;
+    }
+    return false;
+}
+
+bool BlackjackGame::getPlayerIndexCurrentTurn(int index){
+            Player* curr = head;
+    int i = 0;
+    while(curr != nullptr){
+        if(i == index){
+            return curr->isTurn();
+        }
+        i++;
+        curr = curr->next;
+    }
+    return false;
+}
+
+int BlackjackGame::getPlayerIndexValue(int index){
+                Player* curr = head;
+    int i = 0;
+    while(curr != nullptr){
+        if(i == index){
+            return curr->getHandVal();
+        }
+        i++;
+        curr = curr->next;
+    }
+    return false;
 }

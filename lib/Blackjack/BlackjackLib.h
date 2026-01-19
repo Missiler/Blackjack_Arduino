@@ -2,6 +2,7 @@
 #define BlackjackLib_H
 #pragma once
 #include <Adafruit_SSD1306.h>
+#include <array>
 
 enum class ButtonAction {
   None,
@@ -98,16 +99,25 @@ class Player{
         int getPosX();
         int getPosY();
         void setPos(int x, int y);
+        int getPoints();
+        int setPoints();
+        int betPoints();
+        bool isTurn();
+        void setTurnFalse();
+        void setTurnTrue();
+        void setPushFalse();
 
     private:
 
     int cardCount = 0;
     int handValue = 0;
+    int aceCount = 0;
     int numOfHands = 1;
     int points = 0;
 
     bool wonCase = false;
     bool push = false;
+    bool isTurnNow = false;
 
     int posX;
     int posY;
@@ -132,6 +142,7 @@ class BlackjackGame{
         PlayerTurn,
         DealerTurn,
         Finished,
+        DealerTurnPause,
         Restart
     };
 
@@ -156,6 +167,14 @@ class BlackjackGame{
     void reversePlayers();
     String getPlayerHands();
     int getPlayerVal();
+    void setPlayerPosition();
+    String getPlayerIndexHand(int index);
+    int getPlayerIndexValue(int index);
+    std::array<int,2> getPlayerIndexPos(int index);
+    String getPlayerIndexName(int index);
+    bool getPlayerIndexWon(int index);
+    int getPlayerIndexNumberOfCards(int index);
+    bool getPlayerIndexCurrentTurn(int index);
 
 
     private:
