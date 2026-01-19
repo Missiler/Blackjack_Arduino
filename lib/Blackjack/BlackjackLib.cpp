@@ -533,7 +533,7 @@ void BlackjackGame::waitingForPlayersFunction(){
 }
 
 
-void BlackjackGame::update(ButtonAction action){
+void BlackjackGame::update(ButtonAction action, unsigned long currentMillis){
 
     switch(state){
 
@@ -552,7 +552,7 @@ void BlackjackGame::update(ButtonAction action){
 
         //Deal cards to to dealer first, then two to each player
         case GameState::Dealing:
-            dealingFunction();
+            dealingFunction(currentMillis);
 
 
 
@@ -568,7 +568,7 @@ void BlackjackGame::update(ButtonAction action){
 
         //Dealer Turn
         case GameState::DealerTurn:
-            dealerTurnFunction();
+            dealerTurnFunction(currentMillis);
 
 
 
@@ -590,21 +590,43 @@ void BlackjackGame::update(ButtonAction action){
 
 //State Functions ----------------------------
 //Deal the cards
-void BlackjackGame::dealingFunction(){
-    Player* curr = head;
 
-    while(curr != nullptr){
-        for(int i = 0; i < 2; i++){
-            deckPtr->dealCard(*deckPtr, *curr);
-        }
-        curr = curr->next;
+//AI rewrote such that it updates in and reveals the cards once every time interval we'd like. I just could not be bothered to be honest.
+void BlackjackGame::dealingFunction(unsigned long currentMillis){
+    const int totalCards = num_of_players * 2;
+    if (dealingStep == 0) {
+        // Initialize dealing
+        dealingStep = 1;
+        lastDealTime = currentMillis;
+        return;
     }
-    // Hide dealer's first card
-    head->setFirstCardFaceDown();
-    // Set current player to first player
-    currentPlayer = head->next;
-    // After dealing, move to player turn
-    setState(GameState::PlayerTurn);
+
+    if (dealingStep > totalCards) {
+        // All cards dealt
+        // Set current player to first player
+        currentPlayer = head->next;
+        // After dealing, move to player turn
+        setState(GameState::PlayerTurn);
+        dealingStep = 0;  // Reset for next game
+        return;
+    }
+
+    if (currentMillis - lastDealTime >= 1000) {  // 1 second interval
+        int playerIndex = (dealingStep - 1) / 2;
+        Player* curr = head;
+        for(int i = 0; i < playerIndex; i++) curr = curr->next;
+
+        // Deal the next card
+        deckPtr->dealCard(*deckPtr, *curr);
+
+        // If it's the dealer's first card, hide it
+        if (playerIndex == 0 && (dealingStep - 1) % 2 == 0) {
+            curr->setLastCardFaceDown();
+        }
+
+        dealingStep++;
+        lastDealTime = currentMillis;
+    }
 }
 
 void BlackjackGame::playerTurnFunction(ButtonAction action){
@@ -633,14 +655,29 @@ void BlackjackGame::playerTurnFunction(ButtonAction action){
     }
 }
 
-void BlackjackGame::dealerTurnFunction(){
+//AI rewrote it such that it uses the Millis function such that the reveal is done more nice.
+void BlackjackGame::dealerTurnFunction(unsigned long currentMillis){
     Player* dealer = head;
-    dealer->revealHiddenCard();
-    while(dealer->getHandVal() < 17 && !dealer->isBusted()){
-        delay(1000);
-        deckPtr->dealCard(*deckPtr, *dealer);
+    if (dealerTurnStep == 0) {
+        // Reveal hidden card
+        dealer->revealHiddenCard();
+        dealerTurnStep = 1;
+        lastDealTime = currentMillis;
+        return;
     }
-    setState(GameState::Finished);
+
+    if (dealer->getHandVal() >= 17 || dealer->isBusted()) {
+        // Done
+        setState(GameState::Finished);
+        dealerTurnStep = 0;
+        return;
+    }
+
+    if (currentMillis - lastDealTime >= 1000) {
+        // Deal one card
+        deckPtr->dealCard(*deckPtr, *dealer);
+        lastDealTime = currentMillis;
+    }
 }
 
 void BlackjackGame::finishedFunction(){

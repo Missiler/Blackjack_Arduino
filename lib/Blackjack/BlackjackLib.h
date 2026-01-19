@@ -149,15 +149,15 @@ class BlackjackGame{
     //States
     void setState(GameState newState);
     GameState getState() const;
-    void update(ButtonAction action = ButtonAction::None);
+    void update(ButtonAction action = ButtonAction::None, unsigned long currentMillis = 0);
     String getStateString();
 
     //Each State function
     void initialStateFunction();
     void waitingForPlayersFunction();
-    void dealingFunction();
+    void dealingFunction(unsigned long currentMillis);
     void playerTurnFunction(ButtonAction action);
-    void dealerTurnFunction();
+    void dealerTurnFunction(unsigned long currentMillis);
     void finishedFunction();
     void restartFunction(ButtonAction action);
 
@@ -184,6 +184,9 @@ class BlackjackGame{
         Player* head = nullptr;
         Deck* deckPtr = nullptr;
         Player* currentPlayer = nullptr;
+        int dealingStep = 0;
+        unsigned long lastDealTime = 0;
+        int dealerTurnStep = 0;
 };
 
 #endif

@@ -217,7 +217,7 @@ Deck deck1;
 
 BlackjackGame blackjack;
 
-int total_players = 4;
+int total_players = 2;
 
 //Functions ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -319,7 +319,7 @@ for (int i = 0; i <= total_players; i++) {
   else{
   display.setCursor(pos[0] + (screen.CHAR_W * 3),pos[1]);
   }
-  display.print(blackjack.getPlayerIndexValue(i));
+  display.print(blackjack.getPlayerIndexHand(i));
 
   //Player Won
   if(blackjack.getPlayerIndexWon(i) == true){
@@ -379,7 +379,7 @@ void loop() {
   //Controlling Logic
   display.clearDisplay();
   ButtonAction action = readControls();
-  blackjack.update(action);
+  blackjack.update(action, timing.currentMillis);
 
   updateUI();
   display.display();
@@ -388,17 +388,14 @@ void loop() {
 
 /*Till Nästa gång:
 
-Nu är alla funktioner klara för att bygga vidare. Efter gymmet ska jag:
+1. Lägga till betting state så att man kan satsa cash
 
-0. Ladda upp på Github nu när allt funkar
+2. Implementera så att cash tags bort och liknande. Använd max 3st knappar.
 
-1. Skriva klart projektplanen och skicka in den så att Uwe kan se.
+3. Implementera Split
 
-2. Skapa ett UI så att det ser snyggt ut för mig så att det är lätt att gå vidare härifrån.
+4. Börja designa och skapa kontrollers för att kunna styra.
 
-3. Kanske ladda upp allt på GitHub.
-
-4. Sluta få ont i magen.
-
+5. Skriv om så att det fungerar på AVR32DA28
 
 */
