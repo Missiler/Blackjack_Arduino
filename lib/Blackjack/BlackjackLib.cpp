@@ -209,35 +209,30 @@ void Deck::setCardFaceUp(){
     head->setFaceUp();
 }
 
-// PLAYER ---------------------------------------------------
-Player::Player(String name) {
-    this->name = name;
+// HAND ---------------------------------------------------
+Hand::Hand() {
     head = nullptr;
-    next = nullptr;
     cardCount = 0;
     handValue = 0;
     aceCount = 0;
-    numOfHands = 1;
-    points = 0;
-    posX = 0;
-    posY = 0;
 }
 
-int Player::numOfCards(){
+Hand::~Hand() {
+    clear();
+}
+
+int Hand::numOfCards() {
     return cardCount;
 }
 
-void Player::addToHand(String value, String suitAssign)
-{
+void Hand::addCard(String value, String suitAssign) {
     cardCount++;
 
     Card* node = new Card(value, suitAssign);
     node->next = head;
     head = node;
 
-    int v = head->getVal();           // 2-10, 10 for face, 11 for Ace
-
-    // Add the card
+    int v = head->getVal();
     handValue += v;
 
     if (value == "A") {
@@ -245,8 +240,7 @@ void Player::addToHand(String value, String suitAssign)
     }
 }
 
-String Player::checkHandCards()
-{
+String Hand::checkCards() {
     String out = "";
     Card* curr = head;
 
@@ -259,7 +253,7 @@ String Player::checkHandCards()
     return out;
 }
 
-int Player::getHandVal(){
+int Hand::getValue() {
     int val = handValue;
     int aces = aceCount;
     while (val > 21 && aces > 0) {
@@ -269,41 +263,188 @@ int Player::getHandVal(){
     return val;
 }
 
-boolean Player::checkSplit(){
-
-    if (cardCount != 2 || head == nullptr || head->next == nullptr) {
-        return false;
-    }
-
-    int val1 = head->getVal();
-    int val2 = head->next->getVal();
-
-    return val1 == val2;
+boolean Hand::isBusted() {
+    return getValue() > 21;
 }
 
-void Player::clearHand()
-{
+void Hand::clear() {
     while (head != nullptr) {
         Card* tmp = head;
         head = head->next;
         delete tmp;
     }
-
     head = nullptr;
     cardCount = 0;
     handValue = 0;
     aceCount = 0;
+}
 
-    // If you track soft aces, also reset it:
-    // softAces = 0;
+void Hand::revealHiddenCard() {
+    Card* curr = head;
+    while (curr != nullptr) {
+        if (!curr->getFaceDir()) {  // if face down
+            curr->revealCard();
+            break;  // assuming only one hidden card
+        }
+        curr = curr->next;
+    }
+}
+
+void Hand::setLastCardFaceDown() {
+    Card* curr = head;
+    if (curr != nullptr) {
+        while (curr->next != nullptr) {
+            curr = curr->next;
+        }
+        curr->setFaceDown();
+    }
+}
+
+void Hand::setFirstCardFaceDown() {
+    Card* curr = head;
+    if (curr != nullptr) {
+        while (curr->next != nullptr) {
+            curr = curr->next;
+        }
+        curr->setFaceDown();
+    }
+}
+
+bool Hand::canSplit() {
+    return cardCount == 2 && head != nullptr && head->next != nullptr && 
+           head->getVal() == head->next->getVal();
+}
+
+Hand* Hand::split() {
+    if (!canSplit()) return nullptr;
+    
+    // Create new hand with second card
+    Hand* newHand = new Hand();
+    Card* secondCard = head->next;
+    head->next = nullptr; // Remove second card from this hand
+    
+    // Move second card to new hand
+    newHand->head = secondCard;
+    newHand->cardCount = 1;
+    newHand->handValue = secondCard->getVal();
+    if (secondCard->getType() == "A") {
+        newHand->aceCount = 1;
+    }
+    
+    // Update this hand
+    cardCount = 1;
+    handValue = head->getVal();
+    aceCount = (head->getType() == "A") ? 1 : 0;
+    
+    return newHand;
+}
+
+// PLAYER ---------------------------------------------------
+Player::Player(String name) {
+    this->name = name;
+    next = nullptr;
+    points = 0;
+    posX = 0;
+    posY = 0;
+    activeHandIndex = 0;
+    wonCase = false;
+    push = false;
+    isTurnNow = false;
+    
+    // Create initial hand
+    hands.push_back(new Hand());
+}
+
+Player::~Player() {
+    clearHands();
+}
+
+int Player::getNumHands() {
+    return hands.size();
+}
+
+Hand* Player::getHand(int index) {
+    if (index >= 0 && index < hands.size()) {
+        return hands[index];
+    }
+    return nullptr;
+}
+
+void Player::addHand(Hand* hand) {
+    if (hand != nullptr) {
+        hands.push_back(hand);
+    }
+}
+
+void Player::splitHand(int handIndex) {
+    if (handIndex >= 0 && handIndex < hands.size()) {
+        Hand* originalHand = hands[handIndex];
+        if (originalHand->canSplit()) {
+            Hand* newHand = originalHand->split();
+            if (newHand != nullptr) {
+                hands.insert(hands.begin() + handIndex + 1, newHand);
+            }
+        }
+    }
+}
+
+void Player::clearHands() {
+    for (Hand* hand : hands) {
+        delete hand;
+    }
+    hands.clear();
+    hands.push_back(new Hand()); // Always have at least one hand
+    activeHandIndex = 0;
+}
+
+bool Player::hasActiveHand() {
+    return activeHandIndex < hands.size() && !hands[activeHandIndex]->isBusted();
+}
+
+int Player::getActiveHandIndex() {
+    return activeHandIndex;
+}
+
+void Player::setActiveHandIndex(int index) {
+    if (index >= 0 && index < hands.size()) {
+        activeHandIndex = index;
+    }
+}
+
+int Player::numOfCards(){
+    Hand* activeHand = getHand(activeHandIndex);
+    return activeHand ? activeHand->numOfCards() : 0;
+}
+
+void Player::addToHand(String value, String suitAssign) {
+    Hand* activeHand = getHand(activeHandIndex);
+    if (activeHand) {
+        activeHand->addCard(value, suitAssign);
+    }
+}
+
+String Player::checkHandCards() {
+    Hand* activeHand = getHand(activeHandIndex);
+    return activeHand ? activeHand->checkCards() : "";
+}
+
+int Player::getHandVal(){
+    Hand* activeHand = getHand(activeHandIndex);
+    return activeHand ? activeHand->getValue() : 0;
+}
+
+boolean Player::checkSplit(){
+    Hand* activeHand = getHand(activeHandIndex);
+    return activeHand ? activeHand->canSplit() : false;
+}
+
+void Player::clearHand() {
+    clearHands();
 }
 
 boolean Player::isBusted(){
-    
-    if(getHandVal() > 21){
-        return true;
-    }
-    return false;
+    Hand* activeHand = getHand(activeHandIndex);
+    return activeHand ? activeHand->isBusted() : true;
 }
 
 String Player::getName(){
@@ -324,25 +465,23 @@ void Player::setPos(int x, int y){
 }
 
 void Player::revealHiddenCard() {
-    Card* cur = head;
-
-    while (cur != nullptr) {
-        cur->setFaceUp();
-        cur = cur->next;
+    Hand* activeHand = getHand(activeHandIndex);
+    if (activeHand) {
+        activeHand->revealHiddenCard();
     }
 }
 
 void Player::setLastCardFaceDown() {
-    if (head) {
-        head->setFaceDown();
+    Hand* activeHand = getHand(activeHandIndex);
+    if (activeHand) {
+        activeHand->setLastCardFaceDown();
     }
 }
 
 void Player::setFirstCardFaceDown() {
-    if (head && head->next) {
-        head->next->setFaceDown();
-    } else if (head) {
-        head->setFaceDown();
+    Hand* activeHand = getHand(activeHandIndex);
+    if (activeHand) {
+        activeHand->setFirstCardFaceDown();
     }
 }
 
@@ -448,7 +587,17 @@ String BlackjackGame::getPlayerIndexHand(int index){
     {
         if (index == i)
         {
-            return curr->checkHandCards();
+            String result = "";
+            int originalActive = curr->getActiveHandIndex();
+            for(int handIndex = 0; handIndex < curr->getNumHands(); handIndex++){
+                curr->setActiveHandIndex(handIndex);
+                if(handIndex > 0) result += " | ";
+                if(handIndex == originalActive) result += "-";
+                result += curr->checkHandCards();
+                if(handIndex == originalActive) result += "-";
+            }
+            curr->setActiveHandIndex(originalActive); // restore
+            return result;
         }
         curr = curr->next;
         i++;
@@ -632,6 +781,10 @@ void BlackjackGame::dealingFunction(unsigned long currentMillis){
 void BlackjackGame::playerTurnFunction(ButtonAction action){
     if(!currentPlayer) return;
     currentPlayer->setTurnTrue();
+    
+    // Check if current hand can be split
+    bool canSplit = currentPlayer->checkSplit();
+    
     switch(action){
         case ButtonAction::GreenTop:
             if(!currentPlayer->isBusted()){
@@ -639,19 +792,42 @@ void BlackjackGame::playerTurnFunction(ButtonAction action){
             deckPtr->dealCard(*deckPtr, *currentPlayer);
             }
             if(currentPlayer->isBusted()){
-                currentPlayer->setTurnFalse();
-                currentPlayer = currentPlayer->next;
-                if(!currentPlayer) setState(GameState::DealerTurn);
+                // Move to next hand or next player
+                moveToNextHandOrPlayer();
             }
             break;
         case ButtonAction::GreenBottom:
-            // Stand: move to next player
-            currentPlayer->setTurnFalse();
-            currentPlayer = currentPlayer->next;
-            if(!currentPlayer) setState(GameState::DealerTurn);
+            // Stand: move to next hand or next player
+            moveToNextHandOrPlayer();
+            break;
+        case ButtonAction::Up:
+        case ButtonAction::Split:
+            if(canSplit){
+                currentPlayer->splitHand(currentPlayer->getActiveHandIndex());
+                // Hands now have one card each, player can play them separately
+            }
             break;
         default:
             break;
+    }
+}
+
+void BlackjackGame::moveToNextHandOrPlayer() {
+    // Try to move to next hand of current player
+    int nextHandIndex = currentPlayer->getActiveHandIndex() + 1;
+    if (nextHandIndex < currentPlayer->getNumHands()) {
+        currentPlayer->setActiveHandIndex(nextHandIndex);
+        return;
+    }
+    
+    // No more hands for this player, move to next player
+    currentPlayer->setTurnFalse();
+    currentPlayer = currentPlayer->next;
+    if (!currentPlayer || currentPlayer == head) {
+        setState(GameState::DealerTurn);
+    } else {
+        // Reset to first hand of new player
+        currentPlayer->setActiveHandIndex(0);
     }
 }
 
@@ -681,36 +857,51 @@ void BlackjackGame::dealerTurnFunction(unsigned long currentMillis){
 }
 
 void BlackjackGame::finishedFunction(){
-    Player* curr = head;
-    if(curr == nullptr){
+    Player* dealer = head;
+    if(dealer == nullptr){
         state = GameState::Restart;
+        return;
     }
-    int dealerVal = curr->getHandVal();
-    curr = curr->next;
-    while(curr != nullptr){
-        if(dealerVal <= 21){
-                
-            if(curr->getHandVal() == dealerVal){
-                curr->pushResult();
-            }
-            if(curr->isBusted() == true || curr->getHandVal() < dealerVal){
-                curr->setWonStateLoss();
-            }
-            if(curr->getHandVal() > dealerVal && curr->getHandVal() <= 21){
-                curr->setWonStateWon();
-            }
-        }
-        else{
-            if(curr->getHandVal() <= 21){
-                curr->setWonStateWon();
-            }
-            if(curr->isBusted() == true){
-                curr->setWonStateLoss();
-            }
-        }
-        curr = curr->next;
     
+    // Dealer has one hand (typically)
+    int dealerVal = dealer->getHandVal();
+    
+    // Check each player's hands
+    Player* curr = dealer->next;
+    while(curr != nullptr){
+        // Check each hand of the current player
+        bool hasWinningHand = false;
+        bool allHandsBusted = true;
+        
+        for(int handIndex = 0; handIndex < curr->getNumHands(); handIndex++){
+            curr->setActiveHandIndex(handIndex);
+            int handVal = curr->getHandVal();
+            bool handBusted = curr->isBusted();
+            
+            if(!handBusted){
+                allHandsBusted = false;
+                if(dealerVal <= 21){
+                    if(handVal > dealerVal && handVal <= 21){
+                        hasWinningHand = true;
+                    }
+                } else {
+                    hasWinningHand = true;
+                }
+            }
+        }
+        
+        // Set player result based on hands
+        if(hasWinningHand){
+            curr->setWonStateWon();
+        } else if(allHandsBusted || (dealerVal <= 21 && !hasWinningHand)){
+            curr->setWonStateLoss();
+        } else {
+            curr->pushResult(); // tie
+        }
+        
+        curr = curr->next;
     }
+    
     delay(1000);
     state = GameState::Restart;
 }
@@ -766,16 +957,19 @@ bool BlackjackGame::getPlayerIndexWon(int index){
 }
 
 int BlackjackGame::getPlayerIndexNumberOfCards(int index){
-        Player* curr = head;
+    Player* curr = head;
     int i = 0;
     while(curr != nullptr){
         if(i == index){
-            return curr->numOfCards();
+            if(curr->getNumHands() > 0){
+                return curr->numOfCards();
+            }
+            return 0;
         }
         i++;
         curr = curr->next;
     }
-    return false;
+    return 0;
 }
 
 bool BlackjackGame::getPlayerIndexCurrentTurn(int index){
@@ -792,14 +986,17 @@ bool BlackjackGame::getPlayerIndexCurrentTurn(int index){
 }
 
 int BlackjackGame::getPlayerIndexValue(int index){
-                Player* curr = head;
+    Player* curr = head;
     int i = 0;
     while(curr != nullptr){
         if(i == index){
-            return curr->getHandVal();
+            if(curr->getNumHands() > 0){
+                return curr->getHandVal();
+            }
+            return 0;
         }
         i++;
         curr = curr->next;
     }
-    return false;
+    return 0;
 }

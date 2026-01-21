@@ -3,6 +3,7 @@
 #pragma once
 #include <Adafruit_SSD1306.h>
 #include <array>
+#include <vector>
 
 enum class ButtonAction {
   None,
@@ -11,7 +12,8 @@ enum class ButtonAction {
   Right,
   Down,
   GreenTop,
-  GreenBottom
+  GreenBottom,
+  Split
 };
 
 class Player;
@@ -68,6 +70,31 @@ class Deck{
 
 };
 
+class Hand{
+
+    public:
+        Hand();
+        ~Hand();
+
+        int numOfCards();
+        void addCard(String value, String suitAssign);
+        String checkCards();
+        int getValue();
+        boolean isBusted();
+        void clear();
+        void revealHiddenCard();
+        void setLastCardFaceDown();
+        void setFirstCardFaceDown();
+        bool canSplit();
+        Hand* split();
+
+    private:
+        Card* head;
+        int cardCount;
+        int handValue;
+        int aceCount;
+};
+
 
 class Player{
 
@@ -75,8 +102,19 @@ class Player{
 
         //Initilize the player
         Player(String name);
+        ~Player();
 
-        //Player hand
+        //Player hands
+        int getNumHands();
+        Hand* getHand(int index);
+        void addHand(Hand* hand);
+        void splitHand(int handIndex);
+        void clearHands();
+        bool hasActiveHand();
+        int getActiveHandIndex();
+        void setActiveHandIndex(int index);
+        
+        // For backward compatibility - operate on active hand
         int numOfCards();
         String checkHandCards();
         int getHandVal();
@@ -109,10 +147,8 @@ class Player{
 
     private:
 
-    int cardCount = 0;
-    int handValue = 0;
-    int aceCount = 0;
-    int numOfHands = 1;
+    std::vector<Hand*> hands;
+    int activeHandIndex;
     int points = 0;
 
     bool wonCase = false;
@@ -124,9 +160,8 @@ class Player{
 
     String name;
 
-    Card* head;
-
 };
+
 
 class BlackjackGame{
 
@@ -178,6 +213,7 @@ class BlackjackGame{
 
 
     private:
+        void moveToNextHandOrPlayer();
 
         int num_of_players = 0;
         GameState state = GameState::WaitingForPlayers;
