@@ -343,7 +343,7 @@ Hand* Hand::split() {
 Player::Player(String name) {
     this->name = name;
     next = nullptr;
-    points = 0;
+    points = 20;
     posX = 0;
     posY = 0;
     activeHandIndex = 0;
@@ -491,6 +491,7 @@ bool Player::getWonState(){
 
 void Player::setWonStateWon(){
     wonCase = true;
+    points = points + 2 * bet;
 }
 
 void Player::setWonStateLoss(){
@@ -517,6 +518,39 @@ void Player::setPushFalse(){
     push = false;
 }
 
+void Player::increaseBet(){
+    if(points <= 0){
+        return;
+    }
+    bet++;
+    points--;
+}
+
+void Player::decreaseBet(){
+    if(bet <= 0){
+        return;
+    }
+
+    bet--;
+    points++;
+}
+
+void Player::betWin(){
+    points = points + (2 * points);
+}
+
+int Player::getBet(){
+    return bet;
+}
+
+void Player::resetBet(){
+    bet = 0;
+}
+
+int Player::getPoints(){
+    return points;
+}
+
 
 //GAME -------------------------------------------------------
 void BlackjackGame::setState(GameState newState){
@@ -539,12 +573,29 @@ String BlackjackGame::getStateString(){
     }
 }
 
-void BlackjackGame::createPlayers(String name){
+
+
+void BlackjackGame::createPlayers(String name)
+{
     Player* node = new Player(name);
     num_of_players++;
-    node->next = head;
-    head = node;
+
+    // Om listan är tom → gör spelaren till head
+    if (head == nullptr) {
+        head = node;
+        return;
+    }
+
+    // Annars gå till sista noden
+    Player* curr = head;
+    while (curr->next != nullptr) {
+        curr = curr->next;
+    }
+
+    // Lägg in sist
+    curr->next = node;
 }
+
 
 String BlackjackGame::getPlayers(){
 
@@ -672,13 +723,63 @@ void BlackjackGame::initialStateFunction(){
         curr->clearHand();
         curr->setWonStateLoss();
         curr->setPushFalse();
+        curr->resetBet();
         curr = curr->next;
     }
+    currentBettingPlayer = head;
     state = GameState::WaitingForPlayers;
 }
 
-void BlackjackGame::waitingForPlayersFunction(){
-    state = GameState::Dealing;
+void BlackjackGame::waitingForPlayersFunction(ButtonAction action){
+    if(currentBettingPlayer->getName() == "Dealer"){
+        currentBettingPlayer = currentBettingPlayer->next;
+        currentBettingPlayer->setTurnTrue();
+    }
+    if(!currentBettingPlayer) return;
+    switch(action){
+        case ButtonAction::Left:
+            currentBettingPlayer->increaseBet();
+ 
+            break;
+        case ButtonAction::Right:
+            currentBettingPlayer->decreaseBet();
+
+            break;
+        case ButtonAction::GreenBottom:
+            currentBettingPlayer->setTurnFalse();
+            currentBettingPlayer = currentBettingPlayer->next;
+            currentBettingPlayer->setTurnTrue();
+            if(currentBettingPlayer && currentBettingPlayer->getName() == "Dealer"){
+                currentBettingPlayer = nullptr;
+            }
+
+            if(!currentBettingPlayer){
+                // Förr: state = GameState::Dealing;
+                if (countActiveNonDealerPlayers() == 0) {
+                    // Ingen spelare har betat – stanna kvar
+                    // (valfritt: sätt ett UI-meddelande)
+                    // message = "Need players!";
+                    setState(GameState::InitialState);
+                    return;
+                }
+                state = GameState::Dealing;
+                dealingStep = 0; // bra att nollställa
+            }
+    break;
+
+            break;
+        default:
+            break;
+        case ButtonAction::Down:
+
+            createPlayers("P" + String(num_of_players));
+        
+        break;
+
+        case ButtonAction::Up:
+            removeLastPlayer();
+        break;
+    }
 }
 
 
@@ -694,7 +795,7 @@ void BlackjackGame::update(ButtonAction action, unsigned long currentMillis){
 
         //Waiting for Players to be ready: Maybe Betting Later
         case GameState::WaitingForPlayers:
-            waitingForPlayersFunction();
+            waitingForPlayersFunction(action);
 
 
         break;
@@ -742,18 +843,34 @@ void BlackjackGame::update(ButtonAction action, unsigned long currentMillis){
 
 //AI rewrote such that it updates in and reveals the cards once every time interval we'd like. I just could not be bothered to be honest.
 void BlackjackGame::dealingFunction(unsigned long currentMillis){
-    const int totalCards = num_of_players * 2;
+    const int maxPlayers = 10;
     if (dealingStep == 0) {
         // Initialize dealing
         dealingStep = 1;
         lastDealTime = currentMillis;
+        // Populate active players
+        numActivePlayers = 0;
+        Player* curr = head;
+
+        while (curr && numActivePlayers < maxPlayers) {
+        if (curr == head || curr->getBet() > 0) {
+            activePlayers[numActivePlayers++] = curr;
+        }
+        curr = curr->next;
+    }
+
+    }
+    if(numActivePlayers == 0){
+        setState(GameState::WaitingForPlayers);
+        dealingStep = 0;
         return;
     }
 
+    int totalCards = numActivePlayers * 2;
     if (dealingStep > totalCards) {
         // All cards dealt
-        // Set current player to first player
-        currentPlayer = head->next;
+        // Set current player to first active player after dealer
+        currentPlayer = (numActivePlayers > 1) ? activePlayers[1] : nullptr;
         // After dealing, move to player turn
         setState(GameState::PlayerTurn);
         dealingStep = 0;  // Reset for next game
@@ -762,17 +879,15 @@ void BlackjackGame::dealingFunction(unsigned long currentMillis){
 
     if (currentMillis - lastDealTime >= 1000) {  // 1 second interval
         int playerIndex = (dealingStep - 1) / 2;
-        Player* curr = head;
-        for(int i = 0; i < playerIndex; i++) curr = curr->next;
-
-        // Deal the next card
-        deckPtr->dealCard(*deckPtr, *curr);
-
-        // If it's the dealer's first card, hide it
-        if (playerIndex == 0 && (dealingStep - 1) % 2 == 0) {
-            curr->setLastCardFaceDown();
+        if(playerIndex < numActivePlayers){
+            Player* curr = activePlayers[playerIndex];
+            // Deal the next card
+            deckPtr->dealCard(*deckPtr, *curr);
+            // If it's the dealer's first card, hide it
+            if (playerIndex == 0 && (dealingStep - 1) % 2 == 0) {
+                curr->setLastCardFaceDown();
+            }
         }
-
         dealingStep++;
         lastDealTime = currentMillis;
     }
@@ -823,6 +938,10 @@ void BlackjackGame::moveToNextHandOrPlayer() {
     // No more hands for this player, move to next player
     currentPlayer->setTurnFalse();
     currentPlayer = currentPlayer->next;
+    // Skip players with bet == 0
+    while(currentPlayer && currentPlayer != head && currentPlayer->getBet() == 0){
+        currentPlayer = currentPlayer->next;
+    }
     if (!currentPlayer || currentPlayer == head) {
         setState(GameState::DealerTurn);
     } else {
@@ -907,10 +1026,16 @@ void BlackjackGame::finishedFunction(){
 }
 
 void BlackjackGame::restartFunction(ButtonAction action){
+    Player* curr = head;
     // Reset to initial state for a new game
     switch(action){
+        while(curr != nullptr){
+            curr->resetBet();
+            curr = curr->next;
+        }
 
         case ButtonAction::GreenTop: 
+        
 
         setState(GameState::InitialState);
 
@@ -985,6 +1110,19 @@ bool BlackjackGame::getPlayerIndexCurrentTurn(int index){
     return false;
 }
 
+int BlackjackGame::getPlayerIndexBet(int index){
+    Player* curr = head;
+    int i = 0;
+    while(curr != nullptr){
+        if(i == index){
+            return curr->getBet();
+        }
+        i++;
+        curr = curr->next;
+    }
+    return 0;
+}
+
 int BlackjackGame::getPlayerIndexValue(int index){
     Player* curr = head;
     int i = 0;
@@ -999,4 +1137,86 @@ int BlackjackGame::getPlayerIndexValue(int index){
         curr = curr->next;
     }
     return 0;
+}
+
+int BlackjackGame::getPlayerIndexPoints(int index){
+            Player* curr = head;
+    int i = 0;
+    while(curr != nullptr){
+        if(i == index){
+            return curr->getPoints();
+        }
+        i++;
+        curr = curr->next;
+    }
+    return false;
+}
+
+int BlackjackGame::getNumPlayers(){
+    return num_of_players;
+}
+
+
+void BlackjackGame::removeLastPlayer()
+{
+    // Om listan är tom eller bara består av dealern → gör ingenting
+    if (head == nullptr || head->next == nullptr) {
+        return;
+    }
+
+    Player* curr = head;
+
+    // Gå fram tills curr->next är sista spelaren
+    while (curr->next->next != nullptr) {
+        curr = curr->next;
+    }
+
+    // curr->next är sista spelaren → ta bort den
+    Player* last = curr->next;
+    curr->next = nullptr;
+    delete last;
+    num_of_players--;
+}
+
+
+String BlackjackGame::getMessage() {
+
+    switch(state){
+
+        case GameState::InitialState:
+            return "Lesgo";
+
+        case GameState::WaitingForPlayers:
+            return "Middle";
+
+        case GameState::Dealing:
+            return "Dealing";
+
+        case GameState::PlayerTurn:
+            return "Player Turn";
+
+        case GameState::DealerTurn:
+            return "Dealer Turn";
+
+        case GameState::Finished:
+            return "Press Green Top";
+
+        case GameState::Restart:
+            return "Restarting...";
+    }
+
+    // Om någon mot förmodan hamnar här
+    return "";
+}
+
+
+
+int BlackjackGame::countActiveNonDealerPlayers() const {
+    int count = 0;
+    Player* curr = head ? head->next : nullptr; // hoppa över dealer
+    while (curr) {
+        if (curr->getBet() > 0) count++;
+        curr = curr->next;
+    }
+    return count;
 }

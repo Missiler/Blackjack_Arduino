@@ -283,6 +283,7 @@ void handleAction(ButtonAction action)
 
     case ButtonAction::Down:
       // TODO: Down pressed
+    
       break;
 
     case ButtonAction::GreenTop:
@@ -303,6 +304,16 @@ void handleAction(ButtonAction action)
 void updateUI(){
 
 for (int i = 0; i <= total_players; i++) {
+
+  String msg = blackjack.getMessage();
+  int textWidth = msg.length() * screen.CHAR_W;
+
+  int x = (SCREEN_WIDTH - textWidth) / 2;
+
+  display.setCursor(x, 0);
+  display.print(msg);
+
+
   //Player Names
   auto pos = blackjack.getPlayerIndexPos(i);
   display.setCursor(pos[0], pos[1]);
@@ -321,10 +332,19 @@ for (int i = 0; i <= total_players; i++) {
   }
   display.print(blackjack.getPlayerIndexHand(i));
 
+  //Player Bet
+  if(i != 0){
+    display.setCursor(pos[0] + 3 * screen.CHAR_W, pos[1] - 1 * screen.CHAR_H);
+    display.print(String(blackjack.getPlayerIndexBet(i)));
+    display.setCursor(pos[0], pos[1] - 1 * screen.CHAR_H);
+    display.print(String(blackjack.getPlayerIndexPoints(i)));
+  }
+
   //Player Won
   if(blackjack.getPlayerIndexWon(i) == true){
     display.drawRect(pos[0],pos[1],screen.CHAR_W * 2, screen.CHAR_H,SSD1306_WHITE);
   }
+
 }
 }
 
@@ -368,11 +388,13 @@ void setup() {
   for(int i = 0; i < total_players; i++){
     blackjack.createPlayers("P"+String(i+1));
   }
-  blackjack.reversePlayers();
   
   blackjack.setPlayerPosition();
 }
 void loop() {
+
+  total_players = blackjack.getNumPlayers();
+  blackjack.setPlayerPosition();
 
   timing.currentMillis = millis();
   //Start MENU ---------------------------------------------------------------------------------------------------

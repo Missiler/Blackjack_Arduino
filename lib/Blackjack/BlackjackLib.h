@@ -144,12 +144,18 @@ class Player{
         void setTurnFalse();
         void setTurnTrue();
         void setPushFalse();
+        void increaseBet();
+        void decreaseBet();
+        void betWin();
+        int getBet();
+        void resetBet();
 
     private:
 
     std::vector<Hand*> hands;
     int activeHandIndex;
-    int points = 0;
+    int points;
+    int bet = 0;
 
     bool wonCase = false;
     bool push = false;
@@ -189,7 +195,7 @@ class BlackjackGame{
 
     //Each State function
     void initialStateFunction();
-    void waitingForPlayersFunction();
+    void waitingForPlayersFunction(ButtonAction action);
     void dealingFunction(unsigned long currentMillis);
     void playerTurnFunction(ButtonAction action);
     void dealerTurnFunction(unsigned long currentMillis);
@@ -210,6 +216,13 @@ class BlackjackGame{
     bool getPlayerIndexWon(int index);
     int getPlayerIndexNumberOfCards(int index);
     bool getPlayerIndexCurrentTurn(int index);
+    int getPlayerIndexBet(int index);
+    int getPlayerIndexPoints(int index);
+    int setPlayerIndexPoints(int index);
+    int getNumPlayers();
+    void removeLastPlayer();
+    String getMessage();
+    int countActiveNonDealerPlayers() const;
 
 
     private:
@@ -223,6 +236,11 @@ class BlackjackGame{
         int dealingStep = 0;
         unsigned long lastDealTime = 0;
         int dealerTurnStep = 0;
+        Player* currentBettingPlayer = nullptr;
+        Player* activePlayers[10];
+        int numActivePlayers;
+        String message;
+
 };
 
 #endif
